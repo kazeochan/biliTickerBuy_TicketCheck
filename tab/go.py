@@ -367,6 +367,11 @@ def go_tab(demo: gr.Blocks):
                 value=True,
                 info="关闭后，抢票失败时将不再显示有趣的语录",
             )
+            wait_ticket_check_ui = gr.Checkbox(
+                label="等待余票",
+                value=True,
+                info="开启后，程序会在抢票前检查余票情况，只有在有余票时才会开始抢票",
+            )
 
         with gr.Row():
             interval_ui = gr.Number(
@@ -433,6 +438,7 @@ def go_tab(demo: gr.Blocks):
         https_proxys,
         terminal_ui,
         hide_random_message,
+        wait_ticket_check
     ):
         if not files:
             return [gr.update(value=withTimeString("未提交抢票配置"), visible=True)]
@@ -498,6 +504,7 @@ def go_tab(demo: gr.Blocks):
                     https_proxys=",".join(assigned_proxies[assigned_proxies_next_idx]),
                     terminal_ui=terminal_ui,
                     show_random_message=not hide_random_message,
+                    wait_ticket_check=wait_ticket_check
                 )
                 assigned_proxies_next_idx += 1
         gr.Info("正在启动，请等待抢票页面弹出。")
@@ -566,5 +573,6 @@ def go_tab(demo: gr.Blocks):
             https_proxy_ui,
             terminal_ui,
             show_random_message_ui,
+            wait_ticket_check_ui
         ],
     )

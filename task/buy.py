@@ -40,6 +40,7 @@ def buy_stream(
     notifier_config,
     https_proxys,
     show_random_message=True,
+    wait_ticket_check=True,
 ):
     isRunning = True
     left_time = total_attempts
@@ -162,31 +163,32 @@ def buy_stream(
             tickets_info["again"] = 1
             tickets_info["token"] = request_result["data"]["token"]
 
-            _check_request.rotating_UA()
-            yield "1.5）等待有票"
-            has_ticket = False
-            count = 1
-            while not has_ticket and count < 61: 
-                request_can_click = _check_request.get(tickets_info["project_id"])
-                if request_can_click.status_code == 200:
-                    try:
-                        response = request_can_click.json()
-                        for screen in response["data"]["screen_list"]:
-                            if screen['id'] == tickets_info["screen_id"]:
-                                for tickets in screen["ticket_list"]:
-                                    if tickets['id'] == tickets_info["sku_id"]:
-                                        has_ticket = tickets["clickable"] != False
-                    except Exception as e:
-                        yield "无效json", e
-                if not has_ticket:                 
-                    yield f"[等待 {count}/60] 无票"
-                    time.sleep(.5)
-                    count += 1
-            if not has_ticket:
-                if show_random_message:
-                    yield f"群友说👴： {get_random_fail_message()}"
-                yield "重试次数过多，重新准备订单"
-                continue
+            if wait_ticket_check:
+                _check_request.rotating_UA()
+                yield "1.5）等待有票"
+                has_ticket = False
+                count = 1
+                while not has_ticket and count < 61: 
+                    request_can_click = _check_request.get(tickets_info["project_id"])
+                    if request_can_click.status_code == 200:
+                        try:
+                            response = request_can_click.json()
+                            for screen in response["data"]["screen_list"]:
+                                if screen['id'] == tickets_info["screen_id"]:
+                                    for tickets in screen["ticket_list"]:
+                                        if tickets['id'] == tickets_info["sku_id"]:
+                                            has_ticket = tickets["clickable"] != False
+                        except Exception as e:
+                            yield "无效json", e
+                    if not has_ticket:                 
+                        yield f"[等待 {count}/60] 无票"
+                        time.sleep(.5)
+                        count += 1
+                if not has_ticket:
+                    if show_random_message:
+                        yield f"群友说👴： {get_random_fail_message()}"
+                    yield "重试次数过多，重新准备订单"
+                    continue
 
             yield "2）创建订单"
             tickets_info["timestamp"] = int(time.time()) * 1000
@@ -303,6 +305,7 @@ def buy(
     ntfy_username=None,
     ntfy_password=None,
     show_random_message=True,
+    wait_ticket_check=True
 ):
     # 创建NotifierConfig对象
     notifier_config = NotifierConfig(
@@ -325,6 +328,7 @@ def buy(
         notifier_config,
         https_proxys,
         show_random_message,
+        wait_ticket_check,
     ):
         logger.info(msg)
 
@@ -347,6 +351,7 @@ def buy_new_terminal(
     ntfy_username=None,
     ntfy_password=None,
     show_random_message=True,
+    wait_ticket_check=True,
     terminal_ui="网页",
 ) -> subprocess.Popen:
     command = [sys.executable]
@@ -383,6 +388,8 @@ def buy_new_terminal(
         command.extend(["--https_proxys", https_proxys])
     if not show_random_message:
         command.extend(["--hide_random_message"])
+    if wait_ticket_check:
+        command.extend(["--wait_ticket"])
     if terminal_ui:
         command.extend(["--terminal_ui", terminal_ui])
     command.extend(["--filename", filename])

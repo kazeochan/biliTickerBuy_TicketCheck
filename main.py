@@ -101,6 +101,11 @@ def main():
         action="store_true",
         help="hide random message when fail",
     )
+    buy_parser.add_argument(
+        "--wait_ticket",
+        action="store_true",
+        help="wait till ticket is available",
+    )
     parser.add_argument(
         "--port",
         type=int,

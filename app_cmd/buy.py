@@ -88,5 +88,6 @@ def buy_cmd(args: Namespace):
         args.ntfy_username,
         args.ntfy_password,
         not args.hide_random_message,
+        args.wait_ticket,
     )
     logger.info("抢票完成后退出程序。。。。。")
