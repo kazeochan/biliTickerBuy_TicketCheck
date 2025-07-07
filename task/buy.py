@@ -15,6 +15,7 @@ from requests import HTTPError, RequestException
 from util import ERRNO_DICT, time_service
 from util.Notifier import NotifierManager, NotifierConfig
 from util.BiliRequest import BiliRequest
+from util.CheckTicketRequest import CheckTicketRequest
 from util.RandomMessages import get_random_fail_message
 from util.CTokenUtil import CTokenGenerator
 
@@ -51,6 +52,7 @@ def buy_stream(
     tickets_info["deliver_info"] = json.dumps(tickets_info["deliver_info"])
     logger.info(f"使用代理：{https_proxys}")
     _request = BiliRequest(cookies=cookies, proxy=https_proxys)
+    _check_request = CheckTicketRequest(proxy=https_proxys)
 
     if "is_hot_project" in tickets_info:
         is_hot_project = tickets_info["is_hot_project"]
@@ -91,6 +93,7 @@ def buy_stream(
     while isRunning:
         try:
             yield "1）订单准备"
+            _request.rotating_UA()
             if is_hot_project:
                 ctoken_generator = CTokenGenerator(
                     time.time(), 0, randint(2000, 10000)
@@ -103,8 +106,88 @@ def buy_stream(
             )
             request_result = request_result_normal.json()
             yield f"请求头: {request_result_normal.headers} // 请求体: {request_result}"
+            code = int(request_result.get("errno", request_result.get("code")))
+
+            if code == -401:
+                _url = "https://api.bilibili.com/x/gaia-vgate/v1/register"
+                _data = _request.post(
+                    _url,
+                    urlencode(request_result["data"]["ga_data"]["riskParams"]),
+                ).json()
+                yield f"验证码请求: {_data}"
+                csrf: str = _request.cookieManager.get_cookies_value("bili_jct")  # type: ignore
+                token: str = _data["data"]["token"]
+
+                if _data["data"]["type"] == "geetest":
+                    gt = _data["data"]["geetest"]["gt"]
+                    challenge: str = _data["data"]["geetest"]["challenge"]
+                    geetest_validate: str = Amort.validate(gt=gt, challenge=challenge)
+                    geetest_seccode: str = geetest_validate + "|jordan"
+                    yield f"geetest_validate: {geetest_validate},geetest_seccode: {geetest_seccode}"
+
+                    _url = "https://api.bilibili.com/x/gaia-vgate/v1/validate"
+                    _payload = {
+                        "challenge": challenge,
+                        "token": token,
+                        "seccode": geetest_seccode,
+                        "csrf": csrf,
+                        "validate": geetest_validate,
+                    }
+                    _data = _request.post(_url, urlencode(_payload)).json()
+                elif _data["data"]["type"] == "phone":
+                    _payload = {
+                        "code": phone,
+                        "csrf": csrf,
+                        "token": token,
+                    }
+                    _data = _request.post(_url, urlencode(_payload)).json()
+                else:
+                    yield "这是一个程序无法应对的验证码，脚本无法处理"
+                    break
+
+                yield f"validate: {_data}"
+                if int(_data.get("errno", _data.get("code"))) == 0:
+                    yield "验证码成功"
+                else:
+                    yield f"验证码失败 {_data}"
+                    continue
+
+                request_result = _request.post(
+                    url=f"{base_url}/api/ticket/order/prepare?project_id={tickets_info['project_id']}",
+                    data=token_payload,
+                    isJson=True,
+                ).json()
+                yield f"prepare: {request_result}"
+
             tickets_info["again"] = 1
             tickets_info["token"] = request_result["data"]["token"]
+
+            _check_request.rotating_UA()
+            yield "1.5）等待有票"
+            has_ticket = False
+            count = 1
+            while not has_ticket and count < 61: 
+                request_can_click = _check_request.get(tickets_info["project_id"])
+                if request_can_click.status_code == 200:
+                    try:
+                        response = request_can_click.json()
+                        for screen in response["data"]["screen_list"]:
+                            if screen['id'] == tickets_info["screen_id"]:
+                                for tickets in screen["ticket_list"]:
+                                    if tickets['id'] == tickets_info["sku_id"]:
+                                        has_ticket = tickets["clickable"] != False
+                    except Exception as e:
+                        yield "无效json", e
+                if not has_ticket:                 
+                    yield f"[等待 {count}/60] 无票"
+                    time.sleep(.5)
+                    count += 1
+            if not has_ticket:
+                if show_random_message:
+                    yield f"群友说👴： {get_random_fail_message()}"
+                yield "重试次数过多，重新准备订单"
+                continue
+
             yield "2）创建订单"
             tickets_info["timestamp"] = int(time.time()) * 1000
             payload = tickets_info
