@@ -109,57 +109,6 @@ def buy_stream(
             yield f"请求头: {request_result_normal.headers} // 请求体: {request_result}"
             code = int(request_result.get("errno", request_result.get("code")))
 
-            if code == -401:
-                _url = "https://api.bilibili.com/x/gaia-vgate/v1/register"
-                _data = _request.post(
-                    _url,
-                    urlencode(request_result["data"]["ga_data"]["riskParams"]),
-                ).json()
-                yield f"验证码请求: {_data}"
-                csrf: str = _request.cookieManager.get_cookies_value("bili_jct")  # type: ignore
-                token: str = _data["data"]["token"]
-
-                if _data["data"]["type"] == "geetest":
-                    gt = _data["data"]["geetest"]["gt"]
-                    challenge: str = _data["data"]["geetest"]["challenge"]
-                    geetest_validate: str = Amort.validate(gt=gt, challenge=challenge)
-                    geetest_seccode: str = geetest_validate + "|jordan"
-                    yield f"geetest_validate: {geetest_validate},geetest_seccode: {geetest_seccode}"
-
-                    _url = "https://api.bilibili.com/x/gaia-vgate/v1/validate"
-                    _payload = {
-                        "challenge": challenge,
-                        "token": token,
-                        "seccode": geetest_seccode,
-                        "csrf": csrf,
-                        "validate": geetest_validate,
-                    }
-                    _data = _request.post(_url, urlencode(_payload)).json()
-                elif _data["data"]["type"] == "phone":
-                    _payload = {
-                        "code": phone,
-                        "csrf": csrf,
-                        "token": token,
-                    }
-                    _data = _request.post(_url, urlencode(_payload)).json()
-                else:
-                    yield "这是一个程序无法应对的验证码，脚本无法处理"
-                    break
-
-                yield f"validate: {_data}"
-                if int(_data.get("errno", _data.get("code"))) == 0:
-                    yield "验证码成功"
-                else:
-                    yield f"验证码失败 {_data}"
-                    continue
-
-                request_result = _request.post(
-                    url=f"{base_url}/api/ticket/order/prepare?project_id={tickets_info['project_id']}",
-                    data=token_payload,
-                    isJson=True,
-                ).json()
-                yield f"prepare: {request_result}"
-
             tickets_info["again"] = 1
             tickets_info["token"] = request_result["data"]["token"]
 
