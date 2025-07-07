@@ -131,7 +131,7 @@ def buy_stream(
                             yield "无效json", e
                     if not has_ticket:                 
                         yield f"[等待 {count}/60] 无票"
-                        time.sleep(.5)
+                        time.sleep(interval / 1000)
                         count += 1
                 if not has_ticket:
                     if show_random_message:
